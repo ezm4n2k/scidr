@@ -1,10 +1,16 @@
+#!/usr/bin/python3
 import requests
 import base64
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import shodan
 import json 
-import os
+import subprocess
+import socket
+import re
+
+
+cidr_pattern = r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/\d+\b'
 
 def load_config(filename):
     try:
@@ -54,8 +60,38 @@ def remove_duplicates_from_file(filename):
     except FileNotFoundError:
         print(f"File '{filename}' not found.")
         
+def is_valid_ip(target):
+    try:
+        socket.inet_pton(socket.AF_INET, target)
+        return True
+    except socket.error:
+        pass
+    try:
+        socket.inet_pton(socket.AF_INET6, target)
+        return True
+    except socket.error:
+        pass
+    return False  
+     
+def trace_cidr(target):
+    if is_valid_ip(target):
+        command = [f"asnmap -i {target} -silent"]
+    else:
+        command = [f"asnmap -d {target} -silent"]
+    try:
+        process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        output, _= process.communicate()
+        cidr_match = re.search(cidr_pattern, output)
+        if cidr_match:
+            return cidr_match.group()
+        else:
+            return "No CIDR found in the output."
+    except subprocess.CalledProcessError as e:
+        print(f"Error occurre. Try again !!!")
+        return None
+     
 if __name__ == "__main__":
-    config_filename = 'config.json'
+    config_filename = '/home/kali/selftool/scidr/config.json'
     config = load_config(config_filename)
 
     api_key_shodan = config.get('shodan_api_key')
@@ -71,11 +107,23 @@ if __name__ == "__main__":
         config['hunterhow_api_key'] = api_key_hunterhow
     save_config(config_filename, config)
     
-    cidr_ip_range = input('Enter CIDR:')
-    shodan_results = search_websites_on_cidr(cidr_ip_range, api_key_shodan)
-    hunterhow_results = search_hunterhow(cidr_ip_range, api_key_hunterhow)
-    combined_results = shodan_results + hunterhow_results
-    with open('Result.txt', 'w') as file:
-        file.write('\n'.join(combined_results))
-    remove_duplicates_from_file('Result.txt')
-    print("Result in Result.txt")
+    input = input('Enter IP/DOMAIN/CIDR:')
+    cidr =re.search(cidr_pattern,input)
+    if cidr:
+        shodan_results = search_websites_on_cidr(input, api_key_shodan)
+        hunterhow_results = search_hunterhow(input, api_key_hunterhow)
+        combined_results = shodan_results + hunterhow_results
+        with open('/home/kali/selftool/scidr/Result.txt', 'w') as file:
+            file.write('\n'.join(combined_results))
+        remove_duplicates_from_file('/home/kali/selftool/scidr/Result.txt')
+        print("Result in /home/kali/selftool/scidr/Result.txt !!!")
+        
+    else:
+        input=trace_cidr(input)
+        shodan_results = search_websites_on_cidr(input, api_key_shodan)
+        hunterhow_results = search_hunterhow(input, api_key_hunterhow)
+        combined_results = shodan_results + hunterhow_results
+        with open('/home/kali/selftool/scidr/Result.txt', 'w') as file:
+            file.write('\n'.join(combined_results))
+        remove_duplicates_from_file('/home/kali/selftool/scidr/Result.txt')
+        print("Result in /home/kali/selftool/scidr/Result.txt !!!")
