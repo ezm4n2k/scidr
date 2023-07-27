@@ -75,17 +75,11 @@ def is_valid_ip(target):
      
 def trace_cidr(target):
     if is_valid_ip(target):
-        command = [f"asnmap -i {target} -silent"]
+        command = [f"asnmap -i {target} -silent > /home/kali/selftool/scidr/asn.txt"]
     else:
-        command = [f"asnmap -d {target} -silent"]
+        command = [f"asnmap -d {target} -silent > /home/kali/selftool/scidr/asn.txt"]
     try:
         process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        output, _= process.communicate()
-        cidr_match = re.search(cidr_pattern, output)
-        if cidr_match:
-            return cidr_match.group()
-        else:
-            return "No CIDR found in the output."
     except subprocess.CalledProcessError as e:
         print(f"Error occurre. Try again !!!")
         return None
@@ -119,11 +113,14 @@ if __name__ == "__main__":
         print("Result in /home/kali/selftool/scidr/Result.txt !!!")
         
     else:
-        input=trace_cidr(input)
-        shodan_results = search_websites_on_cidr(input, api_key_shodan)
-        hunterhow_results = search_hunterhow(input, api_key_hunterhow)
-        combined_results = shodan_results + hunterhow_results
+        trace_cidr(input)
         with open('/home/kali/selftool/scidr/Result.txt', 'w') as file:
-            file.write('\n'.join(combined_results))
+            with open('/home/kali/selftool/scidr/asn.txt','r',encoding='utf-8') as f:
+                for line in f:
+                    input_target=line.strip()
+                    shodan_results = search_websites_on_cidr(input_target, api_key_shodan)
+                    hunterhow_results = search_hunterhow(input_target, api_key_hunterhow)
+                    combined_results =  shodan_results + hunterhow_results
+                    file.write('\n'.join(combined_results)+ '\n')
         remove_duplicates_from_file('/home/kali/selftool/scidr/Result.txt')
         print("Result in /home/kali/selftool/scidr/Result.txt !!!")
